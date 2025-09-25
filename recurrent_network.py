@@ -27,6 +27,22 @@ class Recurrent_Network(nn.Module):
         # KC recurrence
         h_new = pn_input + torch.matmul(h_prev, self.R)  # [n_KC]
         return h_new
+    
+    def apply_apl(self, forwarded_activations):
+        """
+        Apply APL global inhibition.
+        forwarded_activations: [n_KC]
+        """
+        # Compute population activity (mean or sum, depending on desired effect)
+        inhibition_signal = forwarded_activations.mean()
+
+        # Subtract from all KCs
+        inhibited = forwarded_activations - inhibition_signal
+
+        # Optionally apply nonlinearity (ReLU ensures no negative KC activity)
+        inhibited = torch.relu(inhibited)
+
+        return inhibited
 
     def run_sequence(self, X_seq):
         """
@@ -40,6 +56,7 @@ class Recurrent_Network(nn.Module):
         for t in range(timesteps):
             x_t = X_seq[t]
             h = self.forward(x_t, h)
-            KC_seq.append(h.unsqueeze(0))  # keep timestep dim
+            h_inh = self.apply_apl(h)
+            KC_seq.append(h_inh.unsqueeze(0))  # keep timestep dim
 
         return torch.cat(KC_seq, dim=0)
