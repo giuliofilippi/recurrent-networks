@@ -6,5 +6,40 @@ import torch.nn as nn
 
 # network class
 class Recurrent_Network(nn.Module):
-    def __init__(self, N_PN, N_KC):
+    def __init__(self, n_PN, n_KC, W, R):
         super().__init__()
+        self.n_PN = n_PN
+        self.n_KC = n_KC
+        self.W = nn.Parameter(W)
+        self.R = nn.Parameter(R)
+
+    def forward(self, x_t, h_prev=None):
+        """
+        x_t: input at current timestep [n_PN]
+        h_prev: previous KC activity [n_KC]
+        """
+        if h_prev is None:
+            h_prev = torch.zeros(self.n_KC, device=x_t.device)
+
+        # PN → KC
+        pn_input = torch.matmul(x_t, self.W)  # [n_KC]
+        
+        # KC recurrence
+        h_new = pn_input + torch.matmul(h_prev, self.R)  # [n_KC]
+        return h_new
+
+    def run_sequence(self, X_seq):
+        """
+        X_seq: input sequence of shape [timesteps, n_PN]
+        Returns: KC activity over time [timesteps, n_KC]
+        """
+        timesteps = X_seq.shape[0]
+        h = torch.zeros(self.n_KC)  # initial KC activity
+        KC_seq = []
+
+        for t in range(timesteps):
+            x_t = X_seq[t]
+            h = self.forward(x_t, h)
+            KC_seq.append(h.unsqueeze(0))  # keep timestep dim
+
+        return torch.cat(KC_seq, dim=0)
